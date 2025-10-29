@@ -1,0 +1,66 @@
+##############################################
+# ignore specific to the project
+
+00.bib/
+*PA*_RUN*
+# data were in 3.bft/0.data, EXAMPLE
+# concentrationsSubstitute.csv
+# dont save coda
+CODA*.txt
+#*.txt
+*.pdf
+*.7z
+*.zip
+
+##############################################
+# ignore specific to laTeX
+
+*.aux
+*.glo
+*.idx
+*.log
+*.toc
+*.ist
+*.acn
+*.acr
+*.alg
+*.bbl
+*.blg
+*.dvi
+*.glg
+*.gls
+*.ilg
+*.ind
+*.lof
+*.lot
+*.maf
+*.mtc
+*.mtc1
+*.out
+*.o
+*.so
+
+##############################################
+# ignore specific to windows
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows Installer files
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Windows shortcuts
+*.lnk
+
+########################################################
+# BIG FILES
