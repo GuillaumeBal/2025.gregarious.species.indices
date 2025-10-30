@@ -11,7 +11,7 @@ library(Rcpp)
 Rcpp::sourceCpp("2c.mistral.rebound.cpp")
 
 # --- Simulation Parameters ---
-n_boids <- 500          # Number of boids (can be much larger with C++)
+n_boids <- 5000         # Number of boids (can be much larger with C++)
 width <- 1000           # Width of simulation window
 height <- 800           # Height of simulation window
 max_speed <- 5          # Maximum speed of a boid
