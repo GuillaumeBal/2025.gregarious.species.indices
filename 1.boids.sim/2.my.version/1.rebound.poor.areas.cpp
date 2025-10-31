@@ -13,28 +13,32 @@ using namespace Rcpp;
 DataFrame update_boids_cpp(
     DataFrame boids,          // DataFrame of boid positions and velocities
     DataFrame predators,      // DataFrame of predator positions and velocities
-    DataFrame areas,      // DataFrame of area positions and velocities
+    DataFrame p_areas,      // DataFrame of p_area positions and velocities
+    DataFrame r_areas,      // DataFrame of r_area positions and velocities
     double width,             // Width of the simulation area
     double height,            // Height of the simulation area
     double max_speed,         // Maximum speed for boids
     double max_force,         // Maximum steering force
     double neighbor_radius,   // Radius within which boids interact
     double predator_radius,   // Radius within which boids avoid predators
-    NumericVector area_radius,   // Radius within which boids avoid poor areas
+    NumericVector p_area_radius,   // Radius within which boids avoid poor p_areas
+    NumericVector r_area_radius,   // Radius within which boids avoid poor r_areas
     double separation_weight, // Weight for separation rule
     double alignment_weight,  // Weight for alignment rule
     double cohesion_weight,   // Weight for cohesion rule
     double predator_avoid_weight, // Weight for predator avoidance
-    double area_avoid_weight // Weight for area avoidance
+    double p_area_avoid_weight, // Weight for p_area avoidance,
+    double r_area_attract_weight // Weight for r_area avoidance, negative because they are rich areas
 ) {
   
   srand(time(NULL)); // seed with current time
   
   // --- 1. Extract Data from R DataFrames ---
-  // Get the number of boids, predators and areas
+  // Get the number of boids, predators, p_areas and r_areas
   int n_boids = boids.nrows();
   int n_predators = predators.nrows();
-  int n_areas = areas.nrows();
+  int n_p_areas = p_areas.nrows();
+  int n_r_areas = r_areas.nrows();
   
   // Extract boid positions and velocities as Rcpp NumericVectors
   NumericVector x = boids["x"];  // x-coordinates of boids
@@ -46,9 +50,13 @@ DataFrame update_boids_cpp(
   NumericVector px = predators["x"]; // x-coordinates of predators
   NumericVector py = predators["y"]; // y-coordinates of predators
   
-  // Extract areas positions
-  NumericVector ax = areas["x"]; // x-coordinates of areas
-  NumericVector ay = areas["y"]; // y-coordinates of areas
+  // Extract p_areas positions
+  NumericVector p_ax = p_areas["x"]; // x-coordinates of p_areas
+  NumericVector p_ay = p_areas["y"]; // y-coordinates of p_areas
+  
+  // Extract p_areas positions
+  NumericVector r_ax = r_areas["x"]; // x-coordinates of r_areas
+  NumericVector r_ay = r_areas["y"]; // y-coordinates of r_areas
   
   // --- 2. Helper Function: Limit Vector Magnitude ---
   // This lambda function limits the magnitude of a 2D vector to max_speed
@@ -64,8 +72,8 @@ DataFrame update_boids_cpp(
   // --- 3. Loop Over Each Boid ---
   for (int i = 0; i < n_boids; i++) {
     // Initialize steering vectors for each rule
-    NumericVector sep(2), ali(2), coh(2), pred(2), area(2); // sep=separation, ali=alignment, coh=cohesion, pred=predator avoidance, area = area_avoidance
-    sep[0] = sep[1] = ali[0] = ali[1] = coh[0] = coh[1] = pred[0] = pred[1]= area[0] = area[1] = 0.0; // Initialize to zero
+    NumericVector sep(2), ali(2), coh(2), pred(2), p_area(2), r_area(2); // sep=separation, ali=alignment, coh=cohesion, pred=predator avoidance, p_area = p_area_avoidance
+    sep[0] = sep[1] = ali[0] = ali[1] = coh[0] = coh[1] = pred[0] = pred[1]= p_area[0] = p_area[1] = r_area[0] = r_area[1] = 0.0; // Initialize to zero
     int sep_total = 0, ali_total = 0, coh_total = 0; // Counters for averaging
     
     // --- 4. Calculate Separation, Alignment, Cohesion ---
@@ -113,31 +121,47 @@ DataFrame update_boids_cpp(
       }
     }
     
-    // --- 5. Calculate area Avoidance ---
-    // For each area, steer away if too close
-    for (int k = 0; k < n_areas; k++) {
-      // Calculate distance between boid i and predator k
-      double dx = x[i] - ax[k];
-      double dy = y[i] - ay[k];
+    // --- 5. Calculate p_area Avoidance ---
+    // For each p_area, steer away if too close
+    for (int k = 0; k < n_p_areas; k++) {
+      // Calculate distance between boid i and area k
+      double dx = x[i] - p_ax[k];
+      double dy = y[i] - p_ay[k];
       double d = sqrt(dx*dx + dy*dy);
       
-      // If within predator_radius, add repulsion vector
-      if (d < area_radius[k]) {
-        area[0] += dx / d; // Add x-component of avoidance vector
-        area[1] += dy / d; // Add y-component of avoidance vector
+      // If within area_radius, add repulsion vector
+      if (d < p_area_radius[k]) {
+        p_area[0] += dx / d; // Add x-component of avoidance vector
+        p_area[1] += dy / d; // Add y-component of avoidance vector
       }
     }
+    
+    // --- 5. Calculate r_area attract ---
+    // For each r_area, steer away if too close
+    for (int k = 0; k < n_r_areas; k++) {
+      // Calculate distance between boid i and area k
+      double dx = r_ax[k] - x[i]; // direction to r_area
+      double dy = r_ay[k] - y[i];
+      double d = sqrt(dx*dx + dy*dy);
+      
+      // If within area , substract attraction vector
+      if (d < r_area_radius[k]) {
+        r_area[0] += dx / d; // Add x-component of avoidance vector
+        r_area[1] += dy / d; // Add y-component of avoidance vector
+      }
+    }
+    
     
     // --- 6. Apply Weights and Update Velocity ---
     // Normalize and apply weights to each steering vector
     
     // --- Separation ---
     if (sep_total > 0) {
-      sep[0] /= sep_total; // Average x-component
+      sep[0] /= sep_total ; // Average x-component
       sep[1] /= sep_total; // Average y-component
       sep = limit(sep);    // Limit magnitude
-      sep[0] -= vx[i];    // Subtract current velocity (steering = desired - current)
-      sep[1] -= vy[i];
+      sep[0] -= vx[i] * (1 + 1 * sep_total);    // Subtract current velocity (steering = desired - current)
+      sep[1] -= vy[i] * (1 + 1 * sep_total);
       sep = limit(sep);    // Limit steering force
     }
     
@@ -171,12 +195,20 @@ DataFrame update_boids_cpp(
       pred = limit(pred);  // Limit steering force
     }
     
-    // --- areas Avoidance ---
-    if (sqrt(pow(area[0], 2) + pow(area[1], 2)) > 0) {
-      area = limit(area);  // Limit magnitude
-      area[0] -= vx[i];   // Subtract current velocity
-      area[1] -= vy[i];
-      area = limit(area);  // Limit steering force
+    // --- p_areas Avoidance ---
+    if (sqrt(pow(p_area[0], 2) + pow(p_area[1], 2)) > 0) {
+      p_area = limit(p_area);  // Limit magnitude
+      p_area[0] -= vx[i];   // Subtract current velocity
+      p_area[1] -= vy[i];
+      p_area = limit(p_area);  // Limit steering force
+    }
+    
+    // --- r_areas attractive ---
+    if (sqrt(pow(r_area[0], 2) + pow(r_area[1], 2)) > 0) {
+      r_area = limit(r_area);  // Limit magnitude
+      r_area[0] -= vx[i];   // add current velocity
+      r_area[1] -= vy[i];
+      r_area = limit(r_area * 2);  // Limit steering force
     }
     
     // --- Update Velocity with Weighted Steering ---
@@ -185,12 +217,14 @@ DataFrame update_boids_cpp(
       ali[0] * alignment_weight +
       coh[0] * cohesion_weight +
       pred[0] * predator_avoid_weight +
-      area[0] * area_avoid_weight ;
+      p_area[0] * p_area_avoid_weight +
+      r_area[0] * r_area_attract_weight * 3;
     vy[i] += sep[1] * separation_weight +
       ali[1] * alignment_weight +
       coh[1] * cohesion_weight +
       pred[1] * predator_avoid_weight +
-      area[1] *area_avoid_weight;
+      p_area[1] * p_area_avoid_weight +
+      r_area[1] * r_area_attract_weight * 3;
     
     // --- 7. Limit Speed ---
     // Ensure boid does not exceed max_speed
@@ -236,8 +270,8 @@ DataFrame update_boids_cpp(
 DataFrame update_predators_cpp(
     DataFrame predators,  // DataFrame of predator positions and velocities
     DataFrame boids,      // DataFrame of boid positions and velocities
-    double width,         // Width of the simulation area
-    double height,        // Height of the simulation area
+    double width,         // Width of the simulation p_area
+    double height,        // Height of the simulation p_area
     double max_speed,      // Maximum speed for predators
     double pred_rel_speed // pred relative speed compared to boids
 ) {

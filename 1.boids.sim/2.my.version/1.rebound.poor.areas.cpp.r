@@ -12,19 +12,23 @@ Rcpp::sourceCpp("1.rebound.poor.areas.cpp")
 # Parameters
 n_boids <- 5000
 n_predators <- 10
-n_areas <- 10
+n_p_areas <- 10
+n_r_areas <- 10
 width <- 1000
 height <- 1000
 max_speed <- 20#2
 max_force <- 0.05
 neighbor_radius <- width / 10 #15, the bigger the less groups you get
-separation_weight <- 1#0.5
+separation_weight <- 1 #0.5
 alignment_weight <- 0.1
 cohesion_weight <- 0.1
 predator_radius <- round(width / 20) # change width exclusion zone
-area_radius <- round(width / runif(n_areas ,10 ,30)) # change width exclusion zone
+p_area_radius <- round(width / runif(n_p_areas ,10 , 30)) # change width exclusion zone
+r_area_radius <- round(width / runif(n_r_areas ,30 , 100)) # change width adhesion zone
+
 predator_avoid_weight <- 1.5
-area_avoid_weight <- 1
+p_area_avoid_weight <- 1
+r_area_attract_weight <- 5 # in fact coded as attractive now
 pred_rel_speed <- 1.5
 
 # Initialize boids
@@ -44,28 +48,38 @@ predators <- data.frame(
   vy = runif(n_predators, -0.5, 0.5)
 )
 
-# Initialize areas
-areas <- data.frame(
-  x = runif(n_areas, 0, width),
-  y = runif(n_areas, 0, height),
-  vx = runif(n_areas, -0.5, 0.5),
-  vy = runif(n_areas, -0.5, 0.5)
+# Initialize p_areas
+p_areas <- data.frame(
+  x = runif(n_p_areas, 0, width),
+  y = runif(n_p_areas, 0, height),
+  vx = runif(n_p_areas, -0.5, 0.5),
+  vy = runif(n_p_areas, -0.5, 0.5)
 )
+
+# Initialize r_areas
+r_areas <- data.frame(
+  x = runif(n_r_areas, 0, width),
+  y = runif(n_r_areas, 0, height),
+  vx = runif(n_r_areas, -0.5, 0.5),
+  vy = runif(n_r_areas, -0.5, 0.5)
+)
+
 
 # Animation
 saveGIF({
   for (i in 1:300) {
-    boids <- update_boids_cpp(boids, predators, areas, width, height, max_speed, max_force,
-                              neighbor_radius, predator_radius, area_radius,
+    boids <- update_boids_cpp(boids, predators, p_areas, r_areas, width, height, max_speed, max_force,
+                              neighbor_radius, predator_radius, p_area_radius, r_area_radius,
                               separation_weight, alignment_weight,
-                              cohesion_weight, predator_avoid_weight, area_avoid_weight)
+                              cohesion_weight, predator_avoid_weight, p_area_avoid_weight, r_area_attract_weight)
     
     predators <- update_predators_cpp(predators, boids, width, height, max_speed, pred_rel_speed)
     
     p <- ggplot() +
       geom_point(data = boids, aes(x = x, y = y), color = "blue", size = .5) +
       geom_point(data = predators, aes(x = x, y = y), color = "red", size = 3) +
-      geom_point(data = areas, aes(x = x, y = y), color = "black", size = 3) +
+      geom_point(data = p_areas, aes(x = x, y = y), color = "black", size = 3) +
+      geom_point(data = r_areas, aes(x = x, y = y), color = "green", size = 3) +
       coord_fixed(xlim = c(0, width), ylim = c(0, height)) +
       theme_void()
     print(p)
